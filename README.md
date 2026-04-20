@@ -82,8 +82,8 @@ rm -f /etc/systemd/system/dnns-agent.service
 rm -f /etc/systemd/system/dnns-heartbeat.service
 rm -f /etc/systemd/system/dnns-heartbeat.timer
 rm -f /usr/local/bin/dnns-heartbeat.sh
-# Quitar la clave SSH del operador:
-sed -i '/passkey-dnns@dnns.es-deploy/d' /root/.ssh/authorized_keys
+# Quitar la clave SSH del operador del server RMM:
+sed -i '/dnns.es-deploy/d' /root/.ssh/authorized_keys
 systemctl daemon-reload
 ```
 
