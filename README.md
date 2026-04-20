@@ -87,13 +87,28 @@ systemctl daemon-reload
 
 ---
 
+## Modo white-label (servidor propio)
+
+Si quieres apuntar el agente a **tu propio server RMM** (no al de DNNS), monta primero [`dnns-rmm-server`](https://github.com/dnns-es/dnns-rmm-server) y luego instala el agente con:
+
+```bash
+PASSKEY_HOST=rmm.miempresa.com:3001 \
+RMM_HOST=rmm.miempresa.com \
+bash <(curl -fsSL https://raw.githubusercontent.com/dnns-es/dnns-rmm-agent/main/install.sh)
+```
+
+O sin variables → te lo pregunta interactivo si stdin es terminal.
+
 ## Variables de entorno opcionales
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `PASSKEY_HOST` | `passkey.dnns.es` | Servidor central de registro |
-| `RMM_HOST` | `rmm.dnns.es` | Servidor del túnel SSH |
+| `PASSKEY_HOST` | `passkey.dnns.es` | Host de la API de registro |
+| `RMM_HOST` | `rmm.dnns.es` | Host del sshd:2222 (donde llega el túnel) |
 | `PRODUCTO` | `generic` | Identificador del producto/instalación |
+| `ADMIN_EMAIL` | (vacío) | Email del admin del server (reportado al RMM) |
+| `ADMIN_NAME` | (vacío) | Nombre del admin |
+| `DOMINIO_SERVER` | (vacío) | Dominio público del server (reportado al RMM) |
 
 ---
 

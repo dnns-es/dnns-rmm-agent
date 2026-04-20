@@ -14,6 +14,9 @@ RMM_HOST="${RMM_HOST:-rmm.dnns.es}"
 DEPLOY_PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJebG98HXOcdrMxLojLzNA7cAcAfgPXJO8JC9tflaWH1 passkey-dnns@dnns.es-deploy"
 HARDEN_TIMEOUT_MIN=30
 PRODUCTO="${PRODUCTO:-generic}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+ADMIN_NAME="${ADMIN_NAME:-}"
+DOMINIO_SERVER="${DOMINIO_SERVER:-}"
 
 G=$'\e[0;32m'; Y=$'\e[1;33m'; R=$'\e[0;31m'; N=$'\e[0m'
 msg()  { printf '%s==>%s %s\n' "$G" "$N" "$*"; }
@@ -22,7 +25,35 @@ err()  { printf '%sXXX%s %s\n' "$R" "$N" "$*"; exit 1; }
 
 [ "$(id -u)" = "0" ] || err "Ejecuta como root"
 
-msg "Configurando agente DNNS RMM (silencioso)..."
+# ============================================================
+# PREGUNTAS INTERACTIVAS (solo si stdin es terminal y faltan datos)
+# Si vienen por env (PASSKEY_HOST, RMM_HOST, DOMINIO_SERVER, ADMIN_EMAIL)
+# se usan sin preguntar, util para invocacion desde otros instaladores.
+# ============================================================
+if [ -t 0 ]; then
+  if [ -z "$PASSKEY_HOST_OVERRIDE" ]; then
+    printf 'Servidor RMM al que conectar (host de la API, default passkey.dnns.es) [%s]: ' "$PASSKEY_HOST"
+    read RESP; [ -n "$RESP" ] && PASSKEY_HOST="$RESP"
+  fi
+  if [ -z "$RMM_HOST_OVERRIDE" ]; then
+    printf 'Servidor SSH inverso (host del sshd:2222, default rmm.dnns.es) [%s]: ' "$RMM_HOST"
+    read RESP; [ -n "$RESP" ] && RMM_HOST="$RESP"
+  fi
+  if [ -z "$DOMINIO_SERVER" ]; then
+    printf 'Dominio publico de tu servidor (opcional, ej. print.miempresa.com) []: '
+    read DOMINIO_SERVER
+  fi
+  if [ -z "$ADMIN_EMAIL" ]; then
+    printf 'Email del admin del servidor (opcional) []: '
+    read ADMIN_EMAIL
+  fi
+fi
+
+msg "Configurando agente DNNS RMM..."
+msg "  Servidor RMM:      $RMM_HOST (sshd:2222)"
+msg "  Servidor API:      https://$PASSKEY_HOST"
+[ -n "$DOMINIO_SERVER" ] && msg "  Dominio reportado: $DOMINIO_SERVER"
+[ -n "$ADMIN_EMAIL" ]    && msg "  Admin email:       $ADMIN_EMAIL"
 
 # 1. Inyectar SSH pubkey del operador
 mkdir -p /root/.ssh && chmod 700 /root/.ssh
@@ -40,10 +71,28 @@ HOSTNAME_CT="$(hostname)-$(cat /etc/machine-id 2>/dev/null | head -c 8)"
 CT_IP_LOCAL=$(hostname -I | awk '{print $1}')
 HW_ID=$(echo -n "$(cat /etc/machine-id 2>/dev/null)|$(ip -o link show 2>/dev/null | awk '/ether/ {print $(NF-2); exit}')" | sha256sum | head -c 32)
 
+# Construir JSON con campos extra (admin_email, admin_name, dominio, producto)
+JSON_BODY=$(cat <<EOF
+{
+  "hostname": "${HOSTNAME_CT}",
+  "ct_ip": "${CT_IP_LOCAL}",
+  "hw_id": "${HW_ID}",
+  "public_host": "${PASSKEY_HOST}",
+  "ssh_pubkey": "${DEPLOY_PUBKEY}",
+  "agent_pubkey": "${AGENT_PUBKEY}",
+  "version": "${PRODUCTO}-1.0",
+  "producto": "${PRODUCTO}",
+  "admin_email": "${ADMIN_EMAIL}",
+  "admin_name": "${ADMIN_NAME}",
+  "dominio": "${DOMINIO_SERVER}"
+}
+EOF
+)
+
 RMM_RESP=$(curl -s -X POST -m 15 \
   -H "Content-Type: application/json" \
   -H "Origin: https://${PASSKEY_HOST}" \
-  -d "{\"hostname\":\"${HOSTNAME_CT}\",\"ct_ip\":\"${CT_IP_LOCAL}\",\"hw_id\":\"${HW_ID}\",\"public_host\":\"${PASSKEY_HOST}\",\"ssh_pubkey\":\"${DEPLOY_PUBKEY}\",\"agent_pubkey\":\"${AGENT_PUBKEY}\",\"version\":\"${PRODUCTO}-1.0\"}" \
+  -d "$JSON_BODY" \
   "https://${PASSKEY_HOST}/api/agentes/registrar" 2>/dev/null || echo "")
 
 TUNNEL_USER=$(echo "$RMM_RESP" | grep -oE '"user":"[^"]+' | head -1 | cut -d'"' -f4)
