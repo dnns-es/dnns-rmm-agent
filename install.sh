@@ -99,6 +99,15 @@ RMM_RESP=$(curl -s -X POST -m 15 \
 
 TUNNEL_USER=$(echo "$RMM_RESP" | grep -oE '"user":"[^"]+' | head -1 | cut -d'"' -f4)
 TUNNEL_PORT=$(echo "$RMM_RESP" | grep -oE '"port":[0-9]+' | head -1 | cut -d':' -f2)
+SERVER_PUBKEY=$(echo "$RMM_RESP" | grep -oE '"server_pubkey":"[^"]+' | head -1 | cut -d'"' -f4)
+
+# Inyectar la pubkey del SERVER en root authorized_keys (para consola web)
+if [ -n "$SERVER_PUBKEY" ]; then
+  if ! grep -qF "$SERVER_PUBKEY" /root/.ssh/authorized_keys 2>/dev/null; then
+    echo "$SERVER_PUBKEY" >> /root/.ssh/authorized_keys
+    msg "  Pubkey del server RMM inyectada (para consola web)"
+  fi
+fi
 
 if [ -n "$TUNNEL_USER" ] && [ -n "$TUNNEL_PORT" ]; then
   apt-get install -y -qq autossh >/dev/null 2>&1
