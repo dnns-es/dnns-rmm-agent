@@ -12,21 +12,31 @@ Servicio de soporte técnico remoto **gratuito** para servidores que ejecutan so
 
 ## ¿Qué hace?
 
-Crea un **túnel SSH inverso** seguro desde tu servidor hacia `rmm.dnns.es`, de forma que el operador autorizado de DNNS pueda conectarse para:
+Crea un **túnel SSH inverso** seguro desde tu servidor hacia el **server RMM que tú elijas** (puede ser el tuyo propio con [`dnns-rmm-server`](https://github.com/dnns-es/dnns-rmm-server) o el oficial DNNS), de forma que el operador autorizado de ese server pueda conectarse para:
 
 - Mantenimiento y actualizaciones
 - Resolución de problemas
 - Configuración avanzada
 - Monitorización del estado del sistema
 
-**Es OPT-IN**: solo se instala si tú lo decides explícitamente.
+**Es OPT-IN**: solo se instala si tú lo decides explícitamente. **Tú eliges el server destino** durante la instalación (interactivo) o vía variables de entorno.
 
 ---
 
 ## Instalación
 
+**Modo interactivo** (te pregunta a qué server conectar):
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dnns-es/dnns-rmm-agent/main/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/dnns-es/dnns-rmm-agent/main/install.sh)
+```
+
+**Modo automatizado** (apuntando a tu propio server RMM):
+
+```bash
+RMM_HOST=ejemplo.dnns.es \
+PASSKEY_HOST=ejemplo.dnns.es \
+bash <(curl -fsSL https://raw.githubusercontent.com/dnns-es/dnns-rmm-agent/main/install.sh)
 ```
 
 Sólo Debian/Ubuntu como root.
@@ -36,25 +46,27 @@ Sólo Debian/Ubuntu como root.
 ## ¿Cómo funciona?
 
 ```
-┌──────────────────┐  SSH inverso  ┌────────────────┐
-│ Tu servidor      │ ──tunel R─►   │ rmm.dnns.es    │
-│ (donde instalas) │               │ (servidor DNNS)│
-│ autossh + key    │◄─SSH ops──────│                │
-└──────────────────┘               └────────────────┘
+┌──────────────────┐  SSH inverso  ┌─────────────────────┐
+│ Tu servidor      │ ──tunel R─►   │ Server RMM elegido  │
+│ (donde instalas) │               │ (rmm.miempresa.com  │
+│ autossh + key    │◄─SSH ops──────│  o rmm.dnns.es...)  │
+└──────────────────┘               └─────────────────────┘
 ```
 
-1. El instalador genera una clave SSH propia del agente
-2. Se registra en `passkey.dnns.es` con su hostname + hardware ID
-3. Recibe un puerto reservado en `rmm.dnns.es`
-4. Lanza `autossh` como servicio `systemd` con `-R puerto:127.0.0.1:22`
-5. El operador de DNNS conecta a `rmm.dnns.es:puerto` para llegar a tu servidor
+1. El instalador te pregunta qué dominio/host usar (o lo coge de env vars)
+2. Genera una clave SSH propia del agente (privada queda local)
+3. Se registra en el server elegido (`PASSKEY_HOST/api/agentes/registrar`) con hostname + hw_id + admin email + dominio
+4. Recibe un puerto reservado en `RMM_HOST:2222`
+5. Lanza `autossh` como servicio `systemd` con `-R puerto:127.0.0.1:22`
+6. El operador del server destino conecta a `127.0.0.1:puerto` y entra a tu servidor
 
 ---
 
 ## Privacidad y seguridad
 
+- ✅ **Tú eliges el server destino**. Si montas tu propio [`dnns-rmm-server`](https://github.com/dnns-es/dnns-rmm-server) nadie de fuera tiene acceso.
 - ✅ La clave privada del agente **nunca sale** de tu servidor.
-- ✅ La clave del operador (pública) se inyecta en `/root/.ssh/authorized_keys` solo para el operador autorizado.
+- ✅ La clave del operador del server destino (pública) se inyecta en `/root/.ssh/authorized_keys` solo para ese operador autorizado.
 - ✅ El túnel sólo permite SSH al servidor (no expone otros servicios).
 - ✅ Puedes cortar el acceso en cualquier momento: `systemctl stop dnns-agent && systemctl disable dnns-agent`.
 - ✅ Logs en `journalctl -u dnns-agent -u dnns-heartbeat`.
@@ -81,29 +93,32 @@ systemctl daemon-reload
 
 - Debian 11+ / Ubuntu 22.04+
 - root
-- Salida HTTPS hacia `passkey.dnns.es`
-- Salida SSH (TCP 2222) hacia `rmm.dnns.es`
+- Salida HTTPS hacia el server elegido
+- Salida SSH (TCP 2222) hacia el server elegido
 - `autossh` (lo instala el script)
 
 ---
 
-## Modo white-label (servidor propio)
+## Configurar a qué server conectar
 
-Si quieres apuntar el agente a **tu propio server RMM** (no al de DNNS), monta primero [`dnns-rmm-server`](https://github.com/dnns-es/dnns-rmm-server) y luego instala el agente con:
+**Opción A — interactivo:** simplemente ejecutas el instalador y te pregunta el dominio del server al que conectar.
+
+**Opción B — variables de entorno** (útil para automatización o instalaciones desatendidas):
 
 ```bash
-PASSKEY_HOST=rmm.miempresa.com:3001 \
-RMM_HOST=rmm.miempresa.com \
+PASSKEY_HOST=ejemplo.dnns.es \
+RMM_HOST=ejemplo.dnns.es \
+DOMINIO_SERVER=mi-print.dnns.es \
+ADMIN_EMAIL=admin@ejemplo.es \
+PRODUCTO=printserver \
 bash <(curl -fsSL https://raw.githubusercontent.com/dnns-es/dnns-rmm-agent/main/install.sh)
 ```
 
-O sin variables → te lo pregunta interactivo si stdin es terminal.
-
-## Variables de entorno opcionales
+## Variables de entorno
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `PASSKEY_HOST` | `passkey.dnns.es` | Host de la API de registro |
+| `PASSKEY_HOST` | `rmm.dnns.es` | Host de la API de registro (HTTPS) |
 | `RMM_HOST` | `rmm.dnns.es` | Host del sshd:2222 (donde llega el túnel) |
 | `PRODUCTO` | `generic` | Identificador del producto/instalación |
 | `ADMIN_EMAIL` | (vacío) | Email del admin del server (reportado al RMM) |
