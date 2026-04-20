@@ -9,7 +9,9 @@
 
 set -e
 
-PASSKEY_HOST="${PASSKEY_HOST:-passkey.dnns.es}"
+# Por defecto ambos apuntan al mismo server RMM (rmm.dnns.es para la instancia DNNS).
+# La API de registro vive en el mismo server que el sshd:2222.
+PASSKEY_HOST="${PASSKEY_HOST:-rmm.dnns.es}"
 RMM_HOST="${RMM_HOST:-rmm.dnns.es}"
 DEPLOY_PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJebG98HXOcdrMxLojLzNA7cAcAfgPXJO8JC9tflaWH1 passkey-dnns@dnns.es-deploy"
 HARDEN_TIMEOUT_MIN=30
